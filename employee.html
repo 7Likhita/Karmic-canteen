@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Karmic Canteen</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #f0f4ff, #dff6ff);
+      margin: 40px;
+      color: #333;
+    }
+    h2 {
+	color: #005f99;
+    }
+    input, button {
+      margin: 8px 0;
+      padding: 10px;
+      width: 260px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+	background-color: #007acc;
+	color: white;
+	cursor: pointer;
+    }
+    button:hover {
+	background-color: #005fa3;
+    }
+    #mealForm {
+      margin-top: 20px;
+      background-color: #f9f9f9;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+     #menuSection {
+      margin-top: 30px;
+      background-color: #e6f7ff;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+    li {
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+    .welcome {
+      margin-top: 20px;
+      font-size: 18px;
+      color: #007acc;
+      font-weight: bold;
+    }
+
+
+  </style>
+</head>
+<body>
+  <h2>Employee Meal Booking</h2>
+  <input type="email" id="email" placeholder="Email"><br>
+  <input type="password" id="password" placeholder="Password"><br>
+  <button id="loginBtn">Login</button>
+  
+  <div class="welcome" id="welcomeMessage" style="display:none;"></div>
+
+
+  <!-- 🔥 New Menu Section 🔥 -->
+  <div id="menuSection">
+	<h3>Today's Menu</h3>
+	<ul id="menuList">
+	  <!-- Menu items will be inserted here -->
+	</ul>
+  </div>
+
+  <!-- Meal Booking Section -->
+  <div id="mealForm" style="display:none;">
+    <h3>Select Meals</h3>
+    <label><input type="checkbox" id="breakfast"> Breakfast</label><br>
+    <label><input type="checkbox" id="lunch"> Lunch</label><br>
+    <label><input type="checkbox" id="dinner"> Dinner</label><br>
+    <button onclick="submitMeals()">Submit</button>
+  </div>
+
+  <!-- 💳 Payment QR Code Section -->
+  <div id="paymentSection" style="display:none; margin-top: 20px;">
+  <h3>Scan to Pay</h3>
+  <img id="qrCode" src="" alt="UPI QR Code" width="200">
+</div>
+
+  <!-- Firebase Script -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBV1jQoEIff66fZrhMb5fPWKvcqGDAn2GA",
+      authDomain: "karmic-canteen-app-a7a8a.firebaseapp.com",
+      projectId: "karmic-canteen-app-a7a8a",
+      storageBucket: "karmic-canteen-app-a7a8a.appspot.com",
+      messagingSenderId: "871301610797",
+      appId: "1:871301610797:web:064e46965e2d2be1c9e7a4"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // 🔐Login Function
+    window.login = function () {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          document.getElementById("mealForm").style.display = "block";
+	  document.getElementById("welcomeMessage").style.display = "block";
+          document.getElementById("welcomeMessage").innerText = `Welcome, ${email.split('@')[0]}! Please select your meals below.`;
+
+        })
+        .catch(error => {
+          alert("Login failed: " + error.message);
+          
+        });
+    };
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("loginBtn").addEventListener("click", login);
+    }); 
+
+    // 🍽Submit Meals
+     window.submitMeals = async function () {
+	  const email = auth.currentUser.email;
+	  const breakfast = document.getElementById("breakfast").checked;
+	  const lunch = document.getElementById("lunch").checked;
+	  const dinner = document.getElementById("dinner").checked;
+
+	  const today = `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`;
+	  const menuRef = doc(db, "dailyMenus", today);
+	  const menuSnap = await getDoc(menuRef);
+
+	  if (!menuSnap.exists()) {
+	    alert("Menu not found for today.");
+	    return;
+	  }
+
+	  const data = menuSnap.data();
+	  let total = 0;
+	  if (breakfast) total += data.breakfastPrice;
+	  if (lunch) total += data.lunchPrice;
+	  if (dinner) total += data.dinnerPrice;
+
+	  await setDoc(doc(db, "mealBookings", email), {
+	    breakfast,
+	    lunch,
+	    dinner,
+	    totalPayment: total,
+	    timestamp: new Date().toISOString()
+	  });
+
+	  alert(`Meal selection submitted!\nTotal payment: ₹${total}`);
+
+	  // Show QR code for payment
+	  document.getElementById("paymentSection").style.display = "block";
+	  document.getElementById("qrCode").src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=yourupiid@bank&pn=KarmicCanteen&am=${total}&cu=INR`;
+    };
+
+     // 📅 Load Today's Menu
+    async function loadMenu() {
+      const today = `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`;
+      const menuRef = doc(db, "dailyMenus", today);
+      const menuSnap = await getDoc(menuRef);
+
+      if (menuSnap.exists()) {
+        const data = menuSnap.data();
+        const menuList = document.getElementById("menuList");
+        menuList.innerHTML = `
+          <li><strong>Breakfast:</strong> ${data.breakfast} - &#8377;${data.breakfastPrice}</li>
+          <li><strong>Lunch:</strong> ${data.lunch} - &#8377;${data.lunchPrice}</li>
+          <li><strong>Dinner:</strong> ${data.dinner} - &#8377;${data.dinnerPrice}</li>
+        `;
+      } else {
+        document.getElementById("menuList").innerHTML = "<li>No menu available for today.</li>";
+      }
+    }
+
+    loadMenu(); // Load menu on page load
+
+  </script>
+</body>
+</html>
