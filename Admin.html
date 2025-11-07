@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard - Karmic Canteen</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f4ff;
+      padding: 30px;
+    }
+    h2 {
+      color: #005f99;
+    }
+    input, button {
+      margin: 10px 0;
+      padding: 10px;
+      width: 300px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background-color: #007acc;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #005fa3;
+    }
+    #dashboard {
+      display: none;
+      margin-top: 20px;
+    }
+    .section {
+      margin-bottom: 30px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    ul {
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Admin Login</h2>
+  <input type="password" id="adminPassword" placeholder="Enter admin password">
+  <button id="adminLoginBtn">Login</button>
+
+  <div id="dashboard">
+    <div class="section" id="bookingsSection">
+      <h3>📅 Bookings by Date</h3>
+      <input type="date" id="bookingDate">
+      <button id="filterBookingsBtn">Load Bookings</button>
+      <ul id="bookingList"></ul>
+    </div>
+
+    <div class="section" id="lookupSection">
+      <h3>🔍 Lookup Booking by Email</h3>
+      <input type="email" id="lookupEmail" placeholder="Enter employee email">
+      <button id="lookupBtn">Check Booking</button>
+      <div id="lookupResult">No data yet.</div>
+    </div>
+
+    <div class="section" id="menuSection">
+      <h3>📝 Update Today's Menu</h3>
+      <input type="text" id="breakfast" placeholder="Breakfast item">
+      <input type="number" id="breakfastPrice" placeholder="Breakfast price">
+      <input type="text" id="lunch" placeholder="Lunch item">
+      <input type="number" id="lunchPrice" placeholder="Lunch price">
+      <input type="text" id="dinner" placeholder="Dinner item">
+      <input type="number" id="dinnerPrice" placeholder="Dinner price">
+      <button id="updateMenuBtn">Update Menu</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBV1jQoEIff66fZrhMb5fPWKvcqGDAn2GA",
+      authDomain: "karmic-canteen-app-a7a8a.firebaseapp.com",
+      projectId: "karmic-canteen-app-a7a8a",
+      storageBucket: "karmic-canteen-app-a7a8a.appspot.com",
+      messagingSenderId: "871301610797",
+      appId: "1:871301610797:web:064e46965e2d2be1c9e7a4"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // 🔐 Admin Login
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("adminLoginBtn").addEventListener("click", () => {
+        const password = document.getElementById("adminPassword").value;
+        if (password === "karmicadmin123") {
+          document.getElementById("dashboard").style.display = "block";
+        } else {
+          alert("Incorrect password");
+        }
+      });
+
+      // 📅 Filter Bookings by Date
+      document.getElementById("filterBookingsBtn").addEventListener("click", async () => {
+        const selectedDate = document.getElementById("bookingDate").value;
+        if (!selectedDate) {
+          alert("Please select a date.");
+          return;
+        }
+
+        const bookingList = document.getElementById("bookingList");
+        bookingList.innerHTML = "";
+
+        const bookingsRef = collection(db, "mealBookings");
+        const snapshot = await getDocs(bookingsRef);
+
+        let found = false;
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const bookingDate = data.timestamp?.split("T")[0]; // format: YYYY-MM-DD
+
+          if (bookingDate === selectedDate) {
+            found = true;
+            const item = document.createElement("li");
+            item.textContent =`${doc.id}: Breakfast=${data.breakfast}, Lunch=${data.lunch}, Dinner=${data.dinner}, ₹${data.totalPayment}`;
+            bookingList.appendChild(item);
+          }
+        });
+
+        if (!found) {
+          bookingList.innerHTML = "<li>No bookings found for this date.</li>";
+        }
+      });
+
+      // 🔍 Lookup Booking by Email
+      document.getElementById("lookupBtn").addEventListener("click", async () => {
+        const email = document.getElementById("lookupEmail").value.trim();
+        if (!email) {
+          alert("Please enter a valid email.");
+          return;
+        }
+
+        const userRef = doc(db, "mealBookings", email);
+        const userSnap = await getDoc(userRef);
+
+        const resultDiv = document.getElementById("lookupResult");
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          resultDiv.innerHTML = `
+            <strong>${email}</strong><br>
+            Breakfast: ${data.breakfast ? "Yes" : "No"}<br>
+            Lunch: ${data.lunch ? "Yes" : "No"}<br>
+            Dinner: ${data.dinner ? "Yes" : "No"}<br>
+            Total Payment: ₹${data.totalPayment}
+          `;
+        } else {
+          resultDiv.textContent = "No booking found for this email.";
+        }
+      });
+
+      // 📝 Update Today's Menu
+      document.getElementById("updateMenuBtn").addEventListener("click", async () => {
+        const today = `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`;
+        const menuRef = doc(db, "dailyMenus", today);
+
+        const menuData = {
+          breakfast: document.getElementById("breakfast").value,
+          breakfastPrice: parseInt(document.getElementById("breakfastPrice").value),
+          lunch: document.getElementById("lunch").value,
+          lunchPrice: parseInt(document.getElementById("lunchPrice").value),
+          dinner: document.getElementById("dinner").value,
+          dinnerPrice: parseInt(document.getElementById("dinnerPrice").value)
+        };
+
+        await setDoc(menuRef, menuData);
+        alert("Menu updated successfully!");
+      });
+    });
+  </script>
+</body>
+</html>
